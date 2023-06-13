@@ -128,14 +128,16 @@ int main(int argc, char** argv)
         exit(1);
     }
 
-    FILE* file = fopen(argv[1], "r");
+    FILE* fin = fopen(argv[1], "r");
 
     int size;
-    fscanf(file, "%d", &size);
+    fscanf(fin, "%d", &size);
 
     Point* points = (Point*)malloc(size * sizeof(Point));
     for (int i = 0; i < size; i++)
-        fscanf(file, "%d %d", &points[i].x, &points[i].y);
+        fscanf(fin, "%d %d", &points[i].x, &points[i].y);
+
+    fclose(fin);
 
     Point* hull = (Point*)malloc(size * sizeof(Point));
     int hullSize = 0;
@@ -144,8 +146,12 @@ int main(int argc, char** argv)
     giftWrapping(points, size, hull, &hullSize);
     stopTime(&timer);
 
+    FILE* fout = fopen("output.txt", "w");
+    //fprintf(fout, "%d\n", hullSize);
     for (int i = 0; i < hullSize; i++)
-        printf("%d %d\n", hull[i].x, hull[i].y);
+        fprintf(fout, "%d %d\n", hull[i].x, hull[i].y);
+    
+    fclose(fout);
 
     printf("Elapsed Time: %f ms\n", elapsedTime(timer));
 

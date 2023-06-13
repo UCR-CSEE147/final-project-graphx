@@ -18,8 +18,8 @@ int side (Point p, Point q, Point r)
     int val = (q.y - p.y) * (r.x - q.x) -
               (q.x - p.x) * (r.y - q.y);
  
-    if (val == 0) return 0;  // colinear
-    return (val > 0) ? 1 : -1; // clock or counterclock wise
+    if (val == 0) return 0;
+    return (val > 0) ? 1 : -1; 
 }
 
 vector<Point> giftWrapping(vector<Point> points)
@@ -37,14 +37,11 @@ vector<Point> giftWrapping(vector<Point> points)
     int p = l, q;
     do
     {
-        // Add current point to result
         hull.push_back(points[p]);
  
         q = (p+1)%points.size();
         for (unsigned i = 0; i < points.size(); i++)
         {
-           // If i is more counterclockwise than current q, then
-           // update q
            if (side(points[p], points[i], points[q]) == -1)
                q = i;
         }
