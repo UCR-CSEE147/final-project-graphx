@@ -1,8 +1,9 @@
+#include <iostream>
 #include <algorithm>
 #include <vector>
-#include <iostream>
-#include <fstream>
+#include <execution>
 #include <chrono>
+#include <fstream>
 
 using namespace std;
 using namespace std::chrono;
@@ -12,37 +13,45 @@ struct Point
     int x, y;
 };
 
-int side(Point p, Point q, Point r)
+int side (Point p, Point q, Point r)
 {
     int val = (q.y - p.y) * (r.x - q.x) -
                 (q.x - p.x) * (r.y - q.y);
-    if (val == 0) return 0;  // Collinear to p->q
-    return (val > 0.0f) ? 1 : -1;  // Clockwise or counterclockwise to p->q
+ 
+    if (val == 0) return 0;  // colinear
+    return (val > 0) ? 1 : -1; // clock or counterclock wise
 }
 
-vector<Point> convexHull(vector<Point> points)
+vector<Point> giftWrapping(vector<Point> points)
 {
-    vector<Point> hull;
-
     if (points.size() < 3) return points;
-
-    int leftMost = 0;
-    for (unsigned i = 1; i < points.size(); i++)
-        if (points[i].x < points[leftMost].x)
-            leftMost = i;
-
-    int p = leftMost, q;
+ 
+    vector<Point> hull;
+ 
+    // Find the leftmost point
+    int l = distance(points.begin(), min_element(std::execution::par, points.begin(), points.end(), 
+        [](Point a, Point b) {
+            return a.x < b.x;
+        }));
+ 
+    int p = l, q;
     do
     {
+        // Add current point to result
         hull.push_back(points[p]);
-        q = (p + 1) % points.size();
+ 
+        q = (p+1)%points.size();
         for (unsigned i = 0; i < points.size(); i++)
         {
-            if (side(points[p], points[i], points[q]) == -1)
-                q = i;
+           // If i is more counterclockwise than current q, then
+           // update q
+           if (side(points[p], points[i], points[q]) == -1)
+               q = i;
         }
+ 
         p = q;
-    } while (p != leftMost);
+ 
+    } while (p != l); 
 
     return hull;
 }
@@ -52,7 +61,7 @@ int main (int argc, char** argv)
 
     if (argc != 2) 
     {
-        cout << "Usage: ./naive <input_file>" << endl;
+        cout << "Usage: ./moderncpp <input_file>" << endl;
         return 1;
     }
 
@@ -71,13 +80,12 @@ int main (int argc, char** argv)
     fin.close();
 
     auto start = high_resolution_clock::now();
-    vector<Point> hull = convexHull(points);
+    vector<Point> hull = giftWrapping(points);
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<microseconds>(stop - start);
     cout << "Time taken by function: " << duration.count() << " microseconds" << endl;
 
     ofstream fout("output.txt");
-
     for (auto it = hull.begin(); it != hull.end(); it++)
         fout << it->x << " " << it->y << endl;
 

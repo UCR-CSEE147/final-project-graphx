@@ -19,9 +19,25 @@ __device__ int side(Point p, Point q, Point r)
     return (val > 0) ? 1 : 2;
 }
 
-__global__ void convexHullKernel(Point* points, Point* result, int n) 
-{
-    
+__global__ void convexHullKernel(Point* points, Point* result, int n) {
+    if (n < 3) return;
+
+    int l = 0;
+    for (int i = 1; i < n; i++)
+        if (points[i].x < points[l].x)
+            l = i;
+
+    int p = l, q;
+    int resultSize = 0;
+    do {
+        result[resultSize++] = points[p];
+        q = (p + 1) % n;
+        for (int i = 0; i < n; i++) {
+            if (side(points[p], points[i], points[q]) == 2)
+               q = i;
+        }
+        p = q;
+    } while (p != l);
 }
 
 void convexHull(Point* points, Point* result, int n)

@@ -1,5 +1,6 @@
 *.o
 *.txt
 *.png
-/naive
-/cuda
+naive/convex-hull/naive
+moderncpp/convex-hull/moderncpp
+cuda/convex-hull/cuda
