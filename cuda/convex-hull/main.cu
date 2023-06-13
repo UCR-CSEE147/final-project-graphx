@@ -1,63 +1,156 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "kernel.cu"
 #include "support.h"
+
+#define BLOCK_SIZE 256
+
+struct Point {
+    int x, y;
+};
+
+__global__ void findLeftMost(Point* points, int size, int* leftMostIndex)
+{
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned t = threadIdx.x;
+    if (index >= size) return;
+
+    // Shared memory for each block
+    __shared__ int localIndex[BLOCK_SIZE];
+    __shared__ float localX[BLOCK_SIZE];
+    __shared__ float localY[BLOCK_SIZE];
+
+    // Load points into shared memory
+    localIndex[t] = index;
+    localX[t] = points[index].x;
+    localY[t] = points[index].y; // tie breaker
+    __syncthreads();
+
+    // Perform reduction within each block
+    for (unsigned int stride = blockDim.x / 2; stride > 0; stride >>= 1)
+    {
+        if (t < stride)
+        {
+            if (localX[t] > localX[t + stride] || 
+                (localX[t] == localX[t + stride] && localY[t] > localY[t + stride]))
+            {
+                localX[t] = localX[t + stride];
+                localY[t] = localY[t + stride];
+                localIndex[t] = localIndex[t + stride];
+            }
+        }
+        __syncthreads();
+    }
+
+    // Write the result for this block to global memory
+    if (t == 0)
+    {
+        int oldIndex, newIndex;
+        do {
+            oldIndex = atomicAdd(leftMostIndex, 0);
+            if (localX[0] < points[oldIndex].x || 
+                (localX[0] == points[oldIndex].x && localY[0] < points[oldIndex].y))
+                newIndex = localIndex[0];
+            else
+                newIndex = oldIndex;
+        } while (atomicCAS(leftMostIndex, oldIndex, newIndex) != oldIndex); // compare and swap
+    }
+}
+
+
+int side(Point p, Point q, Point r)
+{
+    int val = (q.y - p.y) * (r.x - q.x) -
+              (q.x - p.x) * (r.y - q.y);
+ 
+    if (val == 0) return 0;
+    return (val > 0) ? 1 : -1;
+}
+
+void giftWrapping(Point* points, int size, Point* hull, int* hullSize)
+{
+    if (size < 3)
+    {
+        hull = points;
+        *hullSize = size;
+        return;
+    }
+
+    /*
+    int leftMost = 0;
+    for (int i = 1; i < size; i++)
+        if (points[i].x < points[leftMost].x)
+            leftMost = i;
+    */
+    
+    Point* d_points;
+    cudaMalloc((void**) &d_points, size * sizeof(Point));
+    cudaMemcpy(d_points, points, size * sizeof(Point), cudaMemcpyHostToDevice);
+
+    int* d_leftMostIndex;
+    cudaMalloc((void**) &d_leftMostIndex, sizeof(int));
+
+    dim3 dim_block(BLOCK_SIZE);
+    dim3 dim_grid((size - 1) / BLOCK_SIZE + 1);
+    findLeftMost<<<dim_grid, dim_block>>>(d_points, size, d_leftMostIndex);
+    cudaDeviceSynchronize();
+
+    int leftMost;
+    cudaMemcpy(&leftMost, d_leftMostIndex, sizeof(int), cudaMemcpyDeviceToHost);
+
+    cudaFree(d_points);
+    cudaFree(d_leftMostIndex);
+    
+    printf("Leftmost: %d\n", leftMost);
+
+    int p = leftMost, q;
+    do
+    {
+        hull[*hullSize] = points[p];
+        q = (p + 1) % size;
+        for (int i = 0; i < size; i++)
+        {
+            if (side(points[p], points[i], points[q]) == -1)
+                q = i;
+        }
+        p = q;
+        (*hullSize)++;
+    } while (p != leftMost);
+}
 
 int main(int argc, char** argv)
 {
     Timer timer;
-    cudaError_t cuda_ret;
 
-    // Check if argument is given
     if (argc != 2)
     {
-        printf("Usage: %s <input file>\n", argv[0]);
-        exit(0);
-    }
-
-    // Open input file from argument
-    FILE* fin = fopen(argv[1], "r");
-    if (fin == NULL)
-    {
-        printf("Error opening file %s\n", argv[1]);
+        printf("Usage: ./cuda <input file>\n");
         exit(1);
     }
 
-    int n = 0;
-    // Read number of points in file
-    fscanf(fin, "%d", &n);
+    FILE* file = fopen(argv[1], "r");
 
-    // Declare host points array and read in points from input file
-    //Point* h_points = (Point*) malloc( sizeof(Point) * n );
+    int size;
+    fscanf(file, "%d", &size);
 
-    Point *points, *result;
-    cudaMallocManaged(&points, sizeof(Point) * n);
-    cudaMallocManaged(&result, sizeof(Point) * n);
+    Point* points = (Point*)malloc(size * sizeof(Point));
+    for (int i = 0; i < size; i++)
+        fscanf(file, "%d %d", &points[i].x, &points[i].y);
 
-    for (unsigned int i = 0; i < n; i++) { fscanf(fin, "%d\t%d", &points[i].x, &points[i].y); }
+    Point* hull = (Point*)malloc(size * sizeof(Point));
+    int hullSize = 0;
 
-    // Close input file
-    fclose(fin);
-
-    // Start timer
     startTime(&timer);
-    convexHull(points, result, n);
-    cuda_ret = cudaDeviceSynchronize();
-    if(cuda_ret != cudaSuccess) printf("Error: %s\n", cudaGetErrorString(cuda_ret));
+    giftWrapping(points, size, hull, &hullSize);
     stopTime(&timer);
 
-    // Print time elapsed and write points to output file
-    printf("Time elapsed: %f s\n", elapsedTime(timer));
-    FILE* fout = fopen("hull.txt", "w");
-    fprintf(fout, "%d\n", n);
-    for (unsigned int i = 0; i < n; i++) { fprintf(fout, "%d\t%d\n", result[i].x, result[i].y); }
-    fclose(fout);
+    for (int i = 0; i < hullSize; i++)
+        printf("%d %d\n", hull[i].x, hull[i].y);
 
-    // Free memory
-    //free(h_points);
-    cudaFree(points);
-    cudaFree(result);
+    printf("Elapsed Time: %f ms\n", elapsedTime(timer));
+
+    free(points);
+    free(hull);
 
     return 0;
 }

@@ -20,7 +20,7 @@ int side(Point p, Point q, Point r)
     return (val > 0.0f) ? 1 : -1;  // Clockwise or counterclockwise to p->q
 }
 
-vector<Point> convexHull(vector<Point> points)
+vector<Point> giftWrapping(vector<Point> points)
 {
     vector<Point> hull;
 
@@ -71,7 +71,7 @@ int main (int argc, char** argv)
     fin.close();
 
     auto start = high_resolution_clock::now();
-    vector<Point> hull = convexHull(points);
+    vector<Point> hull = giftWrapping(points);
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<microseconds>(stop - start);
     cout << "Time taken by function: " << duration.count() << " microseconds" << endl;
