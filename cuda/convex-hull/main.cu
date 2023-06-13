@@ -29,7 +29,7 @@ __global__ void findLeftMost(Point* points, int size, int* leftMostIndex)
     // Perform reduction within each block
     for (unsigned int stride = blockDim.x / 2; stride > 0; stride >>= 1)
     {
-        if (t < stride)
+        if (t < stride && index + stride < size)
         {
             if (localX[t] > localX[t + stride] || 
                 (localX[t] == localX[t + stride] && localY[t] > localY[t + stride]))
@@ -92,7 +92,11 @@ void giftWrapping(Point* points, int size, Point* hull, int* hullSize)
 
     dim3 dim_block(BLOCK_SIZE);
     dim3 dim_grid((size - 1) / BLOCK_SIZE + 1);
+    Timer timer;
+    startTime(&timer);
     findLeftMost<<<dim_grid, dim_block>>>(d_points, size, d_leftMostIndex);
+    stopTime(&timer);
+    printf("Elapsed Time: %f s\n", elapsedTime(timer));
     cudaDeviceSynchronize();
 
     int leftMost;
@@ -103,6 +107,7 @@ void giftWrapping(Point* points, int size, Point* hull, int* hullSize)
     
     printf("Leftmost: %d\n", leftMost);
 
+    startTime(&timer);
     int p = leftMost, q;
     do
     {
@@ -116,11 +121,13 @@ void giftWrapping(Point* points, int size, Point* hull, int* hullSize)
         p = q;
         (*hullSize)++;
     } while (p != leftMost);
+    stopTime(&timer);
+    printf("Elapsed Time: %f s\n", elapsedTime(timer));
 }
 
 int main(int argc, char** argv)
 {
-    Timer timer;
+    // Timer timer;
 
     if (argc != 2)
     {
@@ -142,9 +149,9 @@ int main(int argc, char** argv)
     Point* hull = (Point*)malloc(size * sizeof(Point));
     int hullSize = 0;
 
-    startTime(&timer);
+    //startTime(&timer);
     giftWrapping(points, size, hull, &hullSize);
-    stopTime(&timer);
+    //stopTime(&timer);
 
     FILE* fout = fopen("output.txt", "w");
     //fprintf(fout, "%d\n", hullSize);
@@ -153,7 +160,7 @@ int main(int argc, char** argv)
     
     fclose(fout);
 
-    printf("Elapsed Time: %f ms\n", elapsedTime(timer));
+    //printf("Elapsed Time: %f s\n", elapsedTime(timer));
 
     free(points);
     free(hull);
